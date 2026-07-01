@@ -222,8 +222,20 @@ async function connectX(account) {
     throw new Error(`Step1 gagal: ${step1Res.status}`);
   }
 
+  // Coba baca body-nya -- kemungkinan besar backend ngembaliin state/authorizeUrl/session id
+  // di JSON, bukan lewat cookie. Kalau iya, kita HARUS pakai nilai dari sini, bukan bikin sendiri.
+  let step1Data = null;
+  try {
+    step1Data = await step1Res.clone().json();
+    console.log('--- STEP1 BODY ---', JSON.stringify(step1Data).slice(0, 1000));
+  } catch {
+    const t = await step1Res.text().catch(() => '');
+    console.log('--- STEP1 BODY (non-JSON) ---', t.slice(0, 500));
+  }
+
   const { verifier, challenge } = genPkce();
-  const state = genState();
+  // PENTING: kalau step1Data punya field state (misal step1Data.state), pakai itu, JANGAN generate sendiri.
+  const state = (step1Data && step1Data.state) || genState();
 
   const authorizeUrl =
     `https://x.com/i/api/2/oauth2/authorize?client_id=${X_CLIENT_ID}` +
