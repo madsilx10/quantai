@@ -215,12 +215,16 @@ async function connectX(account) {
     }
   );
   const step3Data = await step3.json();
+  console.log('--- STEP3 STATUS ---', step3.status);
+  console.log('--- STEP3 BODY ---', JSON.stringify(step3Data).slice(0, 1000));
   const finalRedirect = step3Data.redirect_uri;
   if (!finalRedirect) throw new Error('Gagal ambil redirect_uri final dari approve');
 
   // Step 4: hit callback tryquant buat exchange code -> access_token
   const cbUrl = new URL(finalRedirect);
   const step4 = await tqRequest('GET', `${cbUrl.pathname}${cbUrl.search}`, {});
+  console.log('--- STEP4 STATUS ---', step4.status);
+  console.log('--- STEP4 BODY ---', JSON.stringify(step4.data).slice(0, 1000));
   // NOTE: kalau tryquant nyimpen code_verifier di server-side session (bukan client),
   // step4 ini mungkin butuh cookie session dari step1 juga. Kalau gagal, cek response step1
   // untuk Set-Cookie dan re-attach di sini.
