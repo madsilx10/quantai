@@ -447,15 +447,9 @@ async function doVerifyTimerTasks(token, idx) {
 
 async function doFollowTargets(account, idx) {
   const { auth_token, ct0 } = account;
-  // ambil user id sendiri
-  const meRes = await xRequest('GET', 'https://x.com/i/api/1.1/account/verify_credentials.json', { auth_token, ct0 });
-  if (meRes.status !== 200) {
-    console.log(`  [✗] akun ${idx + 1} | gagal ambil sesi X (status ${meRes.status})`);
-    return;
-  }
 
   for (const username of FOLLOW_TARGETS) {
-    const res = await xRequest(
+    const res = await xAuthorizeRequest(
       'POST',
       `https://x.com/i/api/1.1/friendships/create.json?screen_name=${username}`,
       { auth_token, ct0 },
