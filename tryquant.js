@@ -213,13 +213,9 @@ async function connectX(account) {
       redirect: 'manual',
     }
   );
-  console.log('--- STEP1 STATUS ---', step1Res.status);
-  console.log('--- STEP1 LOCATION ---', step1Res.headers.get('location') || '(none)');
-
   // Ambil semua Set-Cookie dari response step 1 buat dipakai lagi di step 4
   let setCookies = step1Res.headers.getSetCookie ? step1Res.headers.getSetCookie() : [];
   let sessionCookie = setCookies.map((c) => c.split(';')[0]).join('; ');
-  console.log('--- STEP1 SET-COOKIE ---', sessionCookie || '(kosong)');
 
   // Kalau ternyata redirect (3xx) dan belum dapet cookie, ikutin manual sambil nyimpen cookie di tiap hop
   if (step1Res.status >= 300 && step1Res.status < 400) {
@@ -238,7 +234,6 @@ async function connectX(account) {
       });
       const hopCookies = hopRes.headers.getSetCookie ? hopRes.headers.getSetCookie() : [];
       collectedCookies.push(...hopCookies);
-      console.log(`--- STEP1 HOP ${hops + 1} ---`, hopRes.status, resolved, 'SET-COOKIE:', hopCookies.join(' | ') || '(kosong)');
       if (hopRes.status >= 300 && hopRes.status < 400) {
         nextUrl = hopRes.headers.get('location');
         hops++;
@@ -248,7 +243,6 @@ async function connectX(account) {
     }
     setCookies = collectedCookies;
     sessionCookie = setCookies.map((c) => c.split(';')[0]).join('; ');
-    console.log('--- STEP1 FINAL SESSION COOKIE (after redirects) ---', sessionCookie || '(masih kosong)');
   } else if (step1Res.status !== 200) {
     throw new Error(`Step1 gagal: ${step1Res.status}`);
   }
@@ -260,10 +254,8 @@ async function connectX(account) {
   let step1Data = null;
   try {
     step1Data = await step1Res.clone().json();
-    console.log('--- STEP1 BODY ---', JSON.stringify(step1Data).slice(0, 1000));
   } catch {
-    const t = await step1Res.text().catch(() => '');
-    console.log('--- STEP1 BODY (non-JSON) ---', t.slice(0, 500));
+    // response non-JSON, gapapa -- akan gagal di pengecekan authUrl di bawah
   }
 
   if (!step1Data || !step1Data.authUrl) {
@@ -273,7 +265,6 @@ async function connectX(account) {
   const authorizeUrl = step1Data.authUrl;
   const authorizeUrlObj = new URL(authorizeUrl);
   const state = authorizeUrlObj.searchParams.get('state');
-  console.log('--- STATE (dari backend) ---', state);
 
   // Step 2: GET authorize (buat approval token dari X)
   // PENTING: x.com/i/oauth2/authorize cuma HTML shell (SPA), bukan API.
@@ -281,11 +272,8 @@ async function connectX(account) {
   // path yang sama tapi host beda -- makanya butuh header API (bearer dll),
   // makanya pakai xRequest (bukan xAuthorizeRequest) di sini.
   const apiAuthorizeUrl = authorizeUrl.replace('https://x.com/i/oauth2/authorize', 'https://api.x.com/2/oauth2/authorize');
-  console.log('--- STEP2 URL ---', apiAuthorizeUrl);
   const step2 = await xRequest('GET', apiAuthorizeUrl, { auth_token, ct0 });
   const step2Text = await step2.text();
-  console.log('--- STEP2 STATUS ---', step2.status);
-  console.log('--- STEP2 BODY (awal) ---', step2Text.slice(0, 1500));
   let approvalCode;
   try {
     const j = JSON.parse(step2Text);
@@ -307,10 +295,7 @@ async function connectX(account) {
     }
   );
   const step3Data = await step3.json();
-  console.log('--- STEP3 STATUS ---', step3.status);
-  console.log('--- STEP3 BODY ---', JSON.stringify(step3Data).slice(0, 1000));
   const finalRedirect = step3Data.redirect_uri;
-  console.log('--- FINAL REDIRECT ---', finalRedirect);
   if (!finalRedirect) throw new Error('Gagal ambil redirect_uri final dari approve');
 
   // Step 4: exchange code -> access_token via backend tryquant
@@ -331,8 +316,6 @@ async function connectX(account) {
     }),
   });
   const step4Text = await step4Res.text();
-  console.log('--- STEP4 STATUS ---', step4Res.status);
-  console.log('--- STEP4 BODY (awal) ---', step4Text.slice(0, 800));
 
   let step4Data = null;
   try {
@@ -385,11 +368,7 @@ async function doDailyClaim(token, idx) {
 
 async function doQuantify(token, idx) {
   const res = await tqRequest('POST', '/api/me/quantify', { token });
-  if (res.data) {
-    console.log(`  [i] akun ${idx + 1} | quantify started, finishesAt: ${res.data.finishesAt}`);
-  } else {
-    logTask(idx, 'quantify', res.status);
-  }
+  logTask(idx, 'quantify', res.status);
 }
 
 async function doEmailAndJoin(token, idx, email) {
@@ -423,7 +402,7 @@ async function doDirectVerifyTasks(token, idx) {
     if (taskId === 'join-the-whitelist' || taskId === 'follow-x') continue; // udah dihandle terpisah
     const res = await tqRequest('POST', '/api/me/tasks/verify', { token }, { body: { taskId } });
     logTask(idx, taskId, res.status);
-    await sleep(500);
+    await sleep(5000);
   }
 }
 
@@ -436,11 +415,11 @@ async function doStartTimerTasks(token, idx) {
     const res = await tqRequest('POST', '/api/me/tasks/start', { token }, { body: { taskId } });
     if (res.data && res.data.readyAt) {
       state[key][taskId] = res.data.readyAt;
-      console.log(`  [i] akun ${idx + 1} | ${taskId.padEnd(38)} | started, readyAt ${res.data.readyAt}`);
+      console.log(`  [i] akun ${idx + 1} | ${taskId.padEnd(38)} | started`);
     } else {
       console.log(`  [-] akun ${idx + 1} | ${taskId.padEnd(38)} | status ${res.status} (mungkin udah start/verified)`);
     }
-    await sleep(500);
+    await sleep(5000);
   }
   saveJson(STATE_FILE, state);
 }
@@ -457,12 +436,12 @@ async function doVerifyTimerTasks(token, idx) {
       continue;
     }
     if (new Date(readyAt) > new Date()) {
-      console.log(`  [-] akun ${idx + 1} | ${taskId.padEnd(38)} | belum ready sampai ${readyAt}, skip`);
+      console.log(`  [-] akun ${idx + 1} | ${taskId.padEnd(38)} | belum ready, skip`);
       continue;
     }
     const res = await tqRequest('POST', '/api/me/tasks/verify', { token }, { body: { taskId } });
     logTask(idx, taskId, res.status);
-    await sleep(500);
+    await sleep(5000);
   }
 }
 
@@ -483,7 +462,7 @@ async function doFollowTargets(account, idx) {
       { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
     );
     logTask(idx, `follow @${username}`, res.status);
-    await sleep(800);
+    await sleep(5000);
   }
 }
 
@@ -541,12 +520,13 @@ async function promptMenu() {
 async function runAccount(account, idx, mode, email) {
   logSection(`AKUN ${idx + 1}`);
   try {
-    const token = await getOrCreateSession(account, idx);
-
     if (mode === 'follow') {
+      // follow-x butuh cookie X mentah aja, gak perlu connect/token tryquant
       await doFollowTargets(account, idx);
       return;
     }
+
+    const token = await getOrCreateSession(account, idx);
 
     if (mode === 'daily') {
       await doDailyClaim(token, idx);
@@ -570,6 +550,7 @@ async function runAccount(account, idx, mode, email) {
       await doFollowXTask(token, idx);
       await doDirectVerifyTasks(token, idx);
       await doStartTimerTasks(token, idx);
+      await doFollowTargets(account, idx);
       return;
     }
 
@@ -597,7 +578,7 @@ async function main() {
 
   for (const idx of indices) {
     await runAccount(accounts[idx], idx, mode, emails[idx]);
-    await sleep(1000);
+    await sleep(5000);
   }
 
   log('Selesai.');
