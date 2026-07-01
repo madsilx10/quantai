@@ -218,17 +218,27 @@ async function connectX(account) {
   console.log('--- STEP3 STATUS ---', step3.status);
   console.log('--- STEP3 BODY ---', JSON.stringify(step3Data).slice(0, 1000));
   const finalRedirect = step3Data.redirect_uri;
+  console.log('--- FINAL REDIRECT ---', finalRedirect);
   if (!finalRedirect) throw new Error('Gagal ambil redirect_uri final dari approve');
 
-  // Step 4: hit callback tryquant buat exchange code -> access_token
-  const cbUrl = new URL(finalRedirect);
-  const step4Res = await fetch(`${BASE}${cbUrl.pathname}${cbUrl.search}`, {
-    headers: { 'User-Agent': UA, 'Accept': 'text/html,application/json' },
-    redirect: 'manual',
+  // Step 4: exchange code -> access_token via backend tryquant
+  const step4Res = await fetch(`${BASE}/api/auth/x`, {
+    method: 'POST',
+    headers: {
+      'User-Agent': UA,
+      'Accept': 'application/json, text/plain, */*',
+      'Content-Type': 'application/json',
+      'Origin': BASE,
+      'Referer': `${BASE}/auth/x/callback?state=${state}&code=${approvalCode}`,
+    },
+    body: JSON.stringify({
+      code: finalRedirect.match(/[?&]code=([^&]+)/)?.[1] || approvalCode,
+      redirectUri: X_REDIRECT_URI,
+      state: finalRedirect.match(/[?&]state=([^&]+)/)?.[1] || state,
+    }),
   });
   const step4Text = await step4Res.text();
   console.log('--- STEP4 STATUS ---', step4Res.status);
-  console.log('--- STEP4 LOCATION HEADER ---', step4Res.headers.get('location'));
   console.log('--- STEP4 BODY (awal) ---', step4Text.slice(0, 800));
 
   let step4Data = null;
