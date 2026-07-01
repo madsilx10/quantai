@@ -49,6 +49,9 @@ const TIMER_TASKS = [
   'like-and-rt-a-daily-post',
   'comment-and-rt-a-daily-instagram-post',
   'comment-and-rt-a-daily-tiktok-post',
+  'follow-on-tiktok-td7307',
+  'follow-on-youtube-84n3ol',
+  'comment-and-rt-a-daily-youtube-post',
 ];
 
 const ACCOUNTS_FILE = path.join(__dirname, 'accounts.txt');
@@ -61,6 +64,17 @@ const UA = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like G
 // ================= UTIL =================
 function log(msg) {
   console.log(msg);
+}
+
+// Log khusus buat hasil task: kasih simbol OK/FAIL biar gampang di-scan
+function logTask(idx, label, status) {
+  const ok = status >= 200 && status < 300;
+  const mark = ok ? '✓' : '✗';
+  console.log(`  [${mark}] akun ${idx + 1} | ${label.padEnd(38)} | status ${status}`);
+}
+
+function logSection(title) {
+  console.log(`\n--- ${title} ---`);
 }
 
 function sleep(ms) {
@@ -354,11 +368,11 @@ async function getOrCreateSession(account, idx) {
     return sessions[key].access_token;
   }
 
-  log(`[akun ${idx + 1}] Connect X...`);
+  console.log(`  [i] akun ${idx + 1} | Connect X...`);
   const tokens = await connectX(account);
   sessions[key] = tokens;
   saveJson(SESSIONS_FILE, sessions);
-  log(`[akun ${idx + 1}] Connect X berhasil.`);
+  console.log(`  [✓] akun ${idx + 1} | Connect X berhasil.`);
   return tokens.access_token;
 }
 
@@ -366,26 +380,26 @@ async function getOrCreateSession(account, idx) {
 async function doDailyClaim(token, idx) {
   const info = await tqRequest('GET', '/api/tasks/daily-claim', { token });
   const verify = await tqRequest('POST', '/api/me/tasks/verify', { token }, { body: { taskId: 'daily-claim' } });
-  log(`[akun ${idx + 1}] daily-claim -> ${verify.status}`);
+  logTask(idx, 'daily-claim', verify.status);
 }
 
 async function doQuantify(token, idx) {
   const res = await tqRequest('POST', '/api/me/quantify', { token });
   if (res.data) {
-    log(`[akun ${idx + 1}] quantify -> started, finishesAt: ${res.data.finishesAt}`);
+    console.log(`  [i] akun ${idx + 1} | quantify started, finishesAt: ${res.data.finishesAt}`);
   } else {
-    log(`[akun ${idx + 1}] quantify -> status ${res.status}`);
+    logTask(idx, 'quantify', res.status);
   }
 }
 
 async function doEmailAndJoin(token, idx, email) {
   if (!email) {
-    log(`[akun ${idx + 1}] SKIP join-the-whitelist: email kosong (cek emails.txt)`);
+    console.log(`  [-] akun ${idx + 1} | join-the-whitelist SKIP (email kosong, cek emails.txt)`);
     return;
   }
   await tqRequest('POST', '/api/me/email', { token }, { body: { email } });
   const verify = await tqRequest('POST', '/api/me/tasks/verify', { token }, { body: { taskId: 'join-the-whitelist' } });
-  log(`[akun ${idx + 1}] join-the-whitelist -> ${verify.status}`);
+  logTask(idx, 'join-the-whitelist', verify.status);
 }
 
 async function doFollowXTask(token, idx) {
@@ -400,15 +414,15 @@ async function doFollowXTask(token, idx) {
     // di sini kita skip actual fetch ke authUrl karena butuh cookie x per akun
     // (bisa ditambah kalau perlu, tapi task ini sering udah auto lolos verify)
   }
-  const verify = await tqRequest('POST', '/api/me/tasks/verify', { token }, { body: { taskId: 'follow-x' } });
-  log(`[akun ${idx + 1}] follow-x -> ${verify.status}`);
+  const verify = await tqRequest('POST', '/api/me/tasks/verify', { token }, { body: { metadata: {}, taskId: 'follow-x' } });
+  logTask(idx, 'follow-x', verify.status);
 }
 
 async function doDirectVerifyTasks(token, idx) {
   for (const taskId of DIRECT_VERIFY_TASKS) {
     if (taskId === 'join-the-whitelist' || taskId === 'follow-x') continue; // udah dihandle terpisah
     const res = await tqRequest('POST', '/api/me/tasks/verify', { token }, { body: { taskId } });
-    log(`[akun ${idx + 1}] ${taskId} -> ${res.status}`);
+    logTask(idx, taskId, res.status);
     await sleep(500);
   }
 }
@@ -422,9 +436,9 @@ async function doStartTimerTasks(token, idx) {
     const res = await tqRequest('POST', '/api/me/tasks/start', { token }, { body: { taskId } });
     if (res.data && res.data.readyAt) {
       state[key][taskId] = res.data.readyAt;
-      log(`[akun ${idx + 1}] start ${taskId} -> readyAt ${res.data.readyAt}`);
+      console.log(`  [i] akun ${idx + 1} | ${taskId.padEnd(38)} | started, readyAt ${res.data.readyAt}`);
     } else {
-      log(`[akun ${idx + 1}] start ${taskId} -> status ${res.status} (mungkin udah pernah start / verified)`);
+      console.log(`  [-] akun ${idx + 1} | ${taskId.padEnd(38)} | status ${res.status} (mungkin udah start/verified)`);
     }
     await sleep(500);
   }
@@ -439,15 +453,15 @@ async function doVerifyTimerTasks(token, idx) {
   for (const taskId of TIMER_TASKS) {
     const readyAt = myState[taskId];
     if (!readyAt) {
-      log(`[akun ${idx + 1}] ${taskId} -> belum pernah di-start, skip`);
+      console.log(`  [-] akun ${idx + 1} | ${taskId.padEnd(38)} | belum pernah di-start, skip`);
       continue;
     }
     if (new Date(readyAt) > new Date()) {
-      log(`[akun ${idx + 1}] ${taskId} -> belum ready sampai ${readyAt}, skip`);
+      console.log(`  [-] akun ${idx + 1} | ${taskId.padEnd(38)} | belum ready sampai ${readyAt}, skip`);
       continue;
     }
     const res = await tqRequest('POST', '/api/me/tasks/verify', { token }, { body: { taskId } });
-    log(`[akun ${idx + 1}] verify ${taskId} -> ${res.status}`);
+    logTask(idx, taskId, res.status);
     await sleep(500);
   }
 }
@@ -457,7 +471,7 @@ async function doFollowTargets(account, idx) {
   // ambil user id sendiri
   const meRes = await xRequest('GET', 'https://x.com/i/api/1.1/account/settings.json', { auth_token, ct0 });
   if (meRes.status !== 200) {
-    log(`[akun ${idx + 1}] follow: gagal ambil sesi X (${meRes.status})`);
+    console.log(`  [✗] akun ${idx + 1} | gagal ambil sesi X (status ${meRes.status})`);
     return;
   }
 
@@ -468,7 +482,7 @@ async function doFollowTargets(account, idx) {
       { auth_token, ct0 },
       { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
     );
-    log(`[akun ${idx + 1}] follow @${username} -> ${res.status}`);
+    logTask(idx, `follow @${username}`, res.status);
     await sleep(800);
   }
 }
@@ -525,6 +539,7 @@ async function promptMenu() {
 
 // ================= MAIN =================
 async function runAccount(account, idx, mode, email) {
+  logSection(`AKUN ${idx + 1}`);
   try {
     const token = await getOrCreateSession(account, idx);
 
@@ -560,7 +575,7 @@ async function runAccount(account, idx, mode, email) {
 
     throw new Error(`Mode tidak dikenal: ${mode}`);
   } catch (err) {
-    log(`[akun ${idx + 1}] ERROR: ${err.message}`);
+    console.log(`  [✗] akun ${idx + 1} | ERROR: ${err.message}`);
   }
 }
 
