@@ -222,8 +222,10 @@ async function connectX(account) {
     throw new Error(`Step1 gagal: ${step1Res.status}`);
   }
 
-  // Coba baca body-nya -- kemungkinan besar backend ngembaliin state/authorizeUrl/session id
-  // di JSON, bukan lewat cookie. Kalau iya, kita HARUS pakai nilai dari sini, bukan bikin sendiri.
+  // Backend ngasih authUrl siap pakai, LENGKAP dengan state & code_challenge yang DIA generate
+  // dan simpen sendiri di server side (makanya gak butuh cookie -- dia track pake state itu).
+  // Kita HARUS pakai authUrl ini apa adanya, JANGAN generate state/PKCE sendiri,
+  // karena kalau beda, server gak bakal nemu sesi yang cocok pas step4 -> 403.
   let step1Data = null;
   try {
     step1Data = await step1Res.clone().json();
@@ -233,15 +235,14 @@ async function connectX(account) {
     console.log('--- STEP1 BODY (non-JSON) ---', t.slice(0, 500));
   }
 
-  const { verifier, challenge } = genPkce();
-  // PENTING: kalau step1Data punya field state (misal step1Data.state), pakai itu, JANGAN generate sendiri.
-  const state = (step1Data && step1Data.state) || genState();
+  if (!step1Data || !step1Data.authUrl) {
+    throw new Error('Step1 gagal: authUrl tidak ditemukan di response');
+  }
 
-  const authorizeUrl =
-    `https://x.com/i/api/2/oauth2/authorize?client_id=${X_CLIENT_ID}` +
-    `&code_challenge=${challenge}&code_challenge_method=S256` +
-    `&redirect_uri=${encodeURIComponent(X_REDIRECT_URI)}` +
-    `&response_type=code&scope=${encodeURIComponent(X_SCOPE)}&state=${state}`;
+  const authorizeUrl = step1Data.authUrl;
+  const authorizeUrlObj = new URL(authorizeUrl);
+  const state = authorizeUrlObj.searchParams.get('state');
+  console.log('--- STATE (dari backend) ---', state);
 
   // Step 2: GET authorize page (buat approval token dari X)
   const step2 = await xRequest('GET', authorizeUrl, { auth_token, ct0 });
