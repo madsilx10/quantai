@@ -261,8 +261,14 @@ async function connectX(account) {
   const state = authorizeUrlObj.searchParams.get('state');
   console.log('--- STATE (dari backend) ---', state);
 
-  // Step 2: GET authorize page (buat approval token dari X)
-  const step2 = await xAuthorizeRequest('GET', authorizeUrl, { auth_token, ct0 });
+  // Step 2: GET authorize (buat approval token dari X)
+  // PENTING: x.com/i/oauth2/authorize cuma HTML shell (SPA), bukan API.
+  // Endpoint yang bener buat dapet JSON auth_code itu di api.x.com, dengan
+  // path yang sama tapi host beda -- makanya butuh header API (bearer dll),
+  // makanya pakai xRequest (bukan xAuthorizeRequest) di sini.
+  const apiAuthorizeUrl = authorizeUrl.replace('https://x.com/i/oauth2/authorize', 'https://api.x.com/2/oauth2/authorize');
+  console.log('--- STEP2 URL ---', apiAuthorizeUrl);
+  const step2 = await xRequest('GET', apiAuthorizeUrl, { auth_token, ct0 });
   const step2Text = await step2.text();
   console.log('--- STEP2 STATUS ---', step2.status);
   console.log('--- STEP2 BODY (awal) ---', step2Text.slice(0, 1500));
@@ -277,7 +283,7 @@ async function connectX(account) {
   if (!approvalCode) throw new Error(`Gagal ambil approval code dari halaman authorize X (status ${step2.status}, body: ${step2Text.slice(0, 300)})`);
 
   // Step 3: POST approve
-  const step3 = await xAuthorizeRequest(
+  const step3 = await xRequest(
     'POST',
     'https://x.com/i/api/2/oauth2/authorize',
     { auth_token, ct0 },
