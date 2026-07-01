@@ -324,19 +324,24 @@ async function connectX(account) {
   try {
     step4Data = JSON.parse(step4Text);
   } catch {
-    // bukan JSON, coba cari access_token di HTML/script embed
-    const m = step4Text.match(/"access_token"\s*:\s*"([^"]+)"/);
-    const m2 = step4Text.match(/"refresh_token"\s*:\s*"([^"]+)"/);
+    // bukan JSON, coba cari token di HTML/script embed (camelCase atau snake_case)
+    const m = step4Text.match(/"(?:access_token|accessToken)"\s*:\s*"([^"]+)"/);
+    const m2 = step4Text.match(/"(?:refresh_token|refreshToken)"\s*:\s*"([^"]+)"/);
     if (m) step4Data = { access_token: m[1], refresh_token: m2 ? m2[1] : null };
   }
 
-  if (!step4Data || !step4Data.access_token) {
+  // API tryquant balikin camelCase (accessToken/refreshToken), tapi ada juga
+  // kemungkinan format lama snake_case -- cek dua-duanya biar aman.
+  const accessToken = step4Data && (step4Data.accessToken || step4Data.access_token);
+  const refreshToken = step4Data && (step4Data.refreshToken || step4Data.refresh_token);
+
+  if (!accessToken) {
     throw new Error(`Callback gagal ambil access_token. status=${step4Res.status}`);
   }
 
   return {
-    access_token: step4Data.access_token,
-    refresh_token: step4Data.refresh_token,
+    access_token: accessToken,
+    refresh_token: refreshToken,
   };
 }
 
