@@ -19,6 +19,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const readline = require('readline');
 
 // ================= CONFIG =================
 const BASE = 'https://whitelist.tryquant.io';
@@ -351,6 +352,56 @@ async function doFollowTargets(account, idx) {
   }
 }
 
+// ================= INTERACTIVE PROMPT =================
+function ask(question) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+}
+
+async function promptMenu() {
+  console.log('\n=== TryQuant Bot ===\n');
+  console.log('Pilih mode:');
+  console.log('  1. all       (connect X, daily, quantify, semua task)');
+  console.log('  2. verify    (verify task yang ada timer)');
+  console.log('  3. daily     (daily claim doang)');
+  console.log('  4. quantify  (quantify doang)');
+  console.log('  5. follow    (follow akun X target)');
+  const modeChoice = await ask('\nPilih (1-5): ');
+  const modeMap = { 1: 'all', 2: 'verify', 3: 'daily', 4: 'quantify', 5: 'follow' };
+  const mode = modeMap[modeChoice];
+  if (!mode) {
+    console.log('Pilihan tidak valid.');
+    process.exit(1);
+  }
+
+  console.log('\nPilih akun:');
+  console.log('  1. Semua akun');
+  console.log('  2. 1 akun (pilih index)');
+  console.log('  3. Dari index tertentu sampai akhir');
+  const scopeChoice = await ask('\nPilih (1-3): ');
+
+  let scopeArg;
+  if (scopeChoice === '1') {
+    scopeArg = 'all';
+  } else if (scopeChoice === '2') {
+    const idx = await ask('Index akun (mulai dari 1): ');
+    scopeArg = `1:${idx}`;
+  } else if (scopeChoice === '3') {
+    const idx = await ask('Mulai dari index (mulai dari 1): ');
+    scopeArg = `from:${idx}`;
+  } else {
+    console.log('Pilihan tidak valid.');
+    process.exit(1);
+  }
+
+  return { mode, scopeArg };
+}
+
 // ================= MAIN =================
 async function runAccount(account, idx, mode, email) {
   try {
@@ -393,10 +444,13 @@ async function runAccount(account, idx, mode, email) {
 }
 
 async function main() {
-  const [, , mode, scopeArg] = process.argv;
+  let [, , mode, scopeArg] = process.argv;
+
+  // Kalau dijalankan tanpa argumen (npm start / node tryquant.js), munculin menu interaktif
   if (!mode || !scopeArg) {
-    console.log('Usage: node tryquant.js <all|verify|daily|quantify|follow> <all|1:<idx>|from:<idx>>');
-    process.exit(1);
+    const answer = await promptMenu();
+    mode = answer.mode;
+    scopeArg = answer.scopeArg;
   }
 
   const accounts = readAccounts();
