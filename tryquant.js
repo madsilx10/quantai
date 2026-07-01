@@ -469,9 +469,15 @@ async function getUserIdByScreenName(account, username) {
   const fieldToggles = encodeURIComponent(JSON.stringify({ withAuxiliaryUserLabels: true }));
   const url = `https://x.com/i/api/graphql/${GQL_USER_BY_SCREEN_NAME}/UserByScreenName?variables=${variables}&features=${features}&fieldToggles=${fieldToggles}`;
   const res = await xRequest('GET', url, { auth_token, ct0 });
-  const data = await res.json().catch(() => null);
+  const rawText = await res.text().catch(() => '');
+  let data = null;
+  try {
+    data = JSON.parse(rawText);
+  } catch {
+    // bukan JSON, biarin data null, raw text keliatan di debug lewat field raw
+  }
   const restId = data?.data?.user?.result?.rest_id;
-  return { status: res.status, restId, raw: data };
+  return { status: res.status, restId, raw: data || rawText.slice(0, 800) };
 }
 
 async function createFriendship(account, userId) {
@@ -489,17 +495,17 @@ async function createFriendship(account, userId) {
 async function doFollowTargets(account, idx) {
   for (const username of FOLLOW_TARGETS) {
     const userLookup = await getUserIdByScreenName(account, username);
+    console.log(`  [debug] akun ${idx + 1} | UserByScreenName status: ${userLookup.status} | restId: ${userLookup.restId || '(tidak ada)'}`);
     if (!userLookup.restId) {
       console.log(`  [✗] akun ${idx + 1} | @${username} | gagal ambil user id (status ${userLookup.status})`);
-      console.log(`  [debug] akun ${idx + 1} | UserByScreenName raw: ${JSON.stringify(userLookup.raw).slice(0, 500)}`);
+      console.log(`  [debug] akun ${idx + 1} | UserByScreenName raw: ${JSON.stringify(userLookup.raw).slice(0, 800)}`);
       await sleep(5000);
       continue;
     }
     const followRes = await createFriendship(account, userLookup.restId);
     logTask(idx, `follow @${username}`, followRes.status);
-    if (followRes.status !== 200) {
-      console.log(`  [debug] akun ${idx + 1} | CreateFriendships body: ${followRes.body.slice(0, 500) || '(kosong)'}`);
-    }
+    console.log(`  [debug] akun ${idx + 1} | CreateFriendship status: ${followRes.status}`);
+    console.log(`  [debug] akun ${idx + 1} | CreateFriendship body: ${followRes.body.slice(0, 800) || '(kosong)'}`);
     await sleep(5000);
   }
 }
