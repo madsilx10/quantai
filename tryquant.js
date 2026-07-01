@@ -197,9 +197,9 @@ async function connectX(account) {
   let approvalCode;
   try {
     const j = JSON.parse(step2Text);
-    approvalCode = j.code;
+    approvalCode = j.auth_code;
   } catch {
-    const m = step2Text.match(/"code"\s*:\s*"([^"]+)"/);
+    const m = step2Text.match(/"auth_code"\s*:\s*"([^"]+)"/);
     if (m) approvalCode = m[1];
   }
   if (!approvalCode) throw new Error(`Gagal ambil approval code dari halaman authorize X (status ${step2.status}, body: ${step2Text.slice(0, 300)})`);
