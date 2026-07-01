@@ -449,16 +449,25 @@ async function doFollowTargets(account, idx) {
   const { auth_token, ct0 } = account;
 
   for (const username of FOLLOW_TARGETS) {
-    const res = await xAuthorizeRequest(
-      'POST',
-      `https://x.com/i/api/1.1/friendships/create.json?screen_name=${username}`,
-      { auth_token, ct0 },
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-    );
+    const url = `https://x.com/i/api/1.1/friendships/create.json?screen_name=${username}`;
+    const reqHeaders = {
+      'User-Agent': UA,
+      'Cookie': `auth_token=${auth_token}; ct0=${ct0}`,
+      'x-csrf-token': ct0,
+      'Accept': '*/*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Content-Type': 'application/x-www-form-urlencoded',
+    };
+    const res = await fetch(url, { method: 'POST', headers: reqHeaders, redirect: 'manual' });
     const bodyText = await res.text().catch(() => '');
     logTask(idx, `follow @${username}`, res.status);
     if (res.status !== 200) {
-      console.log(`  [debug] akun ${idx + 1} | follow @${username} | body: ${bodyText.slice(0, 500)}`);
+      const headersObj = Object.fromEntries(res.headers.entries());
+      console.log(`  [debug] akun ${idx + 1} | URL: ${url}`);
+      console.log(`  [debug] akun ${idx + 1} | REQUEST headers: ${JSON.stringify(reqHeaders)}`);
+      console.log(`  [debug] akun ${idx + 1} | RESPONSE status: ${res.status} | location: ${res.headers.get('location') || '(none)'}`);
+      console.log(`  [debug] akun ${idx + 1} | RESPONSE headers: ${JSON.stringify(headersObj)}`);
+      console.log(`  [debug] akun ${idx + 1} | RESPONSE body: ${bodyText.slice(0, 800) || '(kosong)'}`);
     }
     await sleep(5000);
   }
