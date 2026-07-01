@@ -445,29 +445,60 @@ async function doVerifyTimerTasks(token, idx) {
   }
 }
 
-async function doFollowTargets(account, idx) {
-  const { auth_token, ct0 } = account;
+// GraphQL query ID buat ambil rest_id dari screen_name
+const GQL_USER_BY_SCREEN_NAME = '2qvSHpkWTMS9i0zJAwDNiA';
 
+async function getUserIdByScreenName(account, username) {
+  const { auth_token, ct0 } = account;
+  const variables = encodeURIComponent(JSON.stringify({ screen_name: username, withGrokTranslatedBio: true }));
+  const features = encodeURIComponent(JSON.stringify({
+    hidden_profile_subscriptions_enabled: true,
+    profile_label_improvements_pcf_label_in_post_enabled: true,
+    responsive_web_profile_redirect_enabled: false,
+    rweb_tipjar_consumption_enabled: false,
+    verified_phone_label_enabled: false,
+    subscriptions_verification_info_is_identity_verified_enabled: true,
+    subscriptions_verification_info_verified_since_enabled: true,
+    highlights_tweets_tab_ui_enabled: true,
+    responsive_web_twitter_article_notes_tab_enabled: true,
+    subscriptions_feature_can_gift_premium: true,
+    creator_subscriptions_tweet_preview_api_enabled: true,
+    responsive_web_graphql_skip_user_profile_image_extensions_enabled: false,
+    responsive_web_graphql_timeline_navigation_enabled: true,
+  }));
+  const fieldToggles = encodeURIComponent(JSON.stringify({ withAuxiliaryUserLabels: true }));
+  const url = `https://x.com/i/api/graphql/${GQL_USER_BY_SCREEN_NAME}/UserByScreenName?variables=${variables}&features=${features}&fieldToggles=${fieldToggles}`;
+  const res = await xRequest('GET', url, { auth_token, ct0 });
+  const data = await res.json().catch(() => null);
+  const restId = data?.data?.user?.result?.rest_id;
+  return { status: res.status, restId, raw: data };
+}
+
+async function createFriendship(account, userId) {
+  const { auth_token, ct0 } = account;
+  const res = await xAuthorizeRequest(
+    'POST',
+    `https://x.com/i/api/1.1/friendships/create.json?user_id=${userId}`,
+    { auth_token, ct0 },
+    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+  );
+  const bodyText = await res.text().catch(() => '');
+  return { status: res.status, body: bodyText };
+}
+
+async function doFollowTargets(account, idx) {
   for (const username of FOLLOW_TARGETS) {
-    const url = `https://x.com/i/api/1.1/friendships/create.json?screen_name=${username}`;
-    const reqHeaders = {
-      'User-Agent': UA,
-      'Cookie': `auth_token=${auth_token}; ct0=${ct0}`,
-      'x-csrf-token': ct0,
-      'Accept': '*/*',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Content-Type': 'application/x-www-form-urlencoded',
-    };
-    const res = await fetch(url, { method: 'POST', headers: reqHeaders, redirect: 'manual' });
-    const bodyText = await res.text().catch(() => '');
-    logTask(idx, `follow @${username}`, res.status);
-    if (res.status !== 200) {
-      const headersObj = Object.fromEntries(res.headers.entries());
-      console.log(`  [debug] akun ${idx + 1} | URL: ${url}`);
-      console.log(`  [debug] akun ${idx + 1} | REQUEST headers: ${JSON.stringify(reqHeaders)}`);
-      console.log(`  [debug] akun ${idx + 1} | RESPONSE status: ${res.status} | location: ${res.headers.get('location') || '(none)'}`);
-      console.log(`  [debug] akun ${idx + 1} | RESPONSE headers: ${JSON.stringify(headersObj)}`);
-      console.log(`  [debug] akun ${idx + 1} | RESPONSE body: ${bodyText.slice(0, 800) || '(kosong)'}`);
+    const userLookup = await getUserIdByScreenName(account, username);
+    if (!userLookup.restId) {
+      console.log(`  [✗] akun ${idx + 1} | @${username} | gagal ambil user id (status ${userLookup.status})`);
+      console.log(`  [debug] akun ${idx + 1} | UserByScreenName raw: ${JSON.stringify(userLookup.raw).slice(0, 500)}`);
+      await sleep(5000);
+      continue;
+    }
+    const followRes = await createFriendship(account, userLookup.restId);
+    logTask(idx, `follow @${username}`, followRes.status);
+    if (followRes.status !== 200) {
+      console.log(`  [debug] akun ${idx + 1} | CreateFriendships body: ${followRes.body.slice(0, 500) || '(kosong)'}`);
     }
     await sleep(5000);
   }
