@@ -402,7 +402,7 @@ async function doDirectVerifyTasks(token, idx) {
     if (taskId === 'join-the-whitelist' || taskId === 'follow-x') continue; // udah dihandle terpisah
     const res = await tqRequest('POST', '/api/me/tasks/verify', { token }, { body: { taskId } });
     logTask(idx, taskId, res.status);
-    await sleep(5000);
+    await sleep(12000);
   }
 }
 
@@ -419,7 +419,7 @@ async function doStartTimerTasks(token, idx) {
     } else {
       console.log(`  [-] akun ${idx + 1} | ${taskId.padEnd(38)} | status ${res.status} (mungkin udah start/verified)`);
     }
-    await sleep(5000);
+    await sleep(12000);
   }
   saveJson(STATE_FILE, state);
 }
@@ -441,7 +441,7 @@ async function doVerifyTimerTasks(token, idx) {
     }
     const res = await tqRequest('POST', '/api/me/tasks/verify', { token }, { body: { taskId } });
     logTask(idx, taskId, res.status);
-    await sleep(5000);
+    await sleep(12000);
   }
 }
 
@@ -495,18 +495,14 @@ async function createFriendship(account, userId) {
 async function doFollowTargets(account, idx) {
   for (const username of FOLLOW_TARGETS) {
     const userLookup = await getUserIdByScreenName(account, username);
-    console.log(`  [debug] akun ${idx + 1} | UserByScreenName status: ${userLookup.status} | restId: ${userLookup.restId || '(tidak ada)'}`);
     if (!userLookup.restId) {
       console.log(`  [✗] akun ${idx + 1} | @${username} | gagal ambil user id (status ${userLookup.status})`);
-      console.log(`  [debug] akun ${idx + 1} | UserByScreenName raw: ${JSON.stringify(userLookup.raw).slice(0, 800)}`);
-      await sleep(5000);
+      await sleep(12000);
       continue;
     }
     const followRes = await createFriendship(account, userLookup.restId);
     logTask(idx, `follow @${username}`, followRes.status);
-    console.log(`  [debug] akun ${idx + 1} | CreateFriendship status: ${followRes.status}`);
-    console.log(`  [debug] akun ${idx + 1} | CreateFriendship body: ${followRes.body.slice(0, 800) || '(kosong)'}`);
-    await sleep(5000);
+    await sleep(12000);
   }
 }
 
@@ -570,6 +566,19 @@ async function runAccount(account, idx, mode, email) {
       return;
     }
 
+    if (mode === 'all') {
+      // follow duluan, sebelum connect X, karena cuma butuh cookie mentah
+      await doFollowTargets(account, idx);
+      const token = await getOrCreateSession(account, idx);
+      await doDailyClaim(token, idx);
+      await doQuantify(token, idx);
+      await doEmailAndJoin(token, idx, email);
+      await doFollowXTask(token, idx);
+      await doDirectVerifyTasks(token, idx);
+      await doStartTimerTasks(token, idx);
+      return;
+    }
+
     const token = await getOrCreateSession(account, idx);
 
     if (mode === 'daily') {
@@ -584,17 +593,6 @@ async function runAccount(account, idx, mode, email) {
 
     if (mode === 'verify') {
       await doVerifyTimerTasks(token, idx);
-      return;
-    }
-
-    if (mode === 'all') {
-      await doDailyClaim(token, idx);
-      await doQuantify(token, idx);
-      await doEmailAndJoin(token, idx, email);
-      await doFollowXTask(token, idx);
-      await doDirectVerifyTasks(token, idx);
-      await doStartTimerTasks(token, idx);
-      await doFollowTargets(account, idx);
       return;
     }
 
@@ -622,7 +620,7 @@ async function main() {
 
   for (const idx of indices) {
     await runAccount(accounts[idx], idx, mode, emails[idx]);
-    await sleep(5000);
+    await sleep(12000);
   }
 
   log('Selesai.');
