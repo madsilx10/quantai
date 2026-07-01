@@ -482,7 +482,7 @@ async function getUserIdByScreenName(account, username) {
 
 async function createFriendship(account, userId) {
   const { auth_token, ct0 } = account;
-  const res = await xAuthorizeRequest(
+  const res = await xRequest(
     'POST',
     `https://x.com/i/api/1.1/friendships/create.json?user_id=${userId}`,
     { auth_token, ct0 },
