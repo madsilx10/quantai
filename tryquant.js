@@ -183,6 +183,8 @@ async function connectX(account) {
   // Step 2: GET authorize page (buat approval token dari X)
   const step2 = await xRequest('GET', authorizeUrl, { auth_token, ct0 });
   const step2Text = await step2.text();
+  console.log('--- STEP2 STATUS ---', step2.status);
+  console.log('--- STEP2 BODY (awal) ---', step2Text.slice(0, 1500));
   let approvalCode;
   try {
     const j = JSON.parse(step2Text);
@@ -191,7 +193,7 @@ async function connectX(account) {
     const m = step2Text.match(/"code"\s*:\s*"([^"]+)"/);
     if (m) approvalCode = m[1];
   }
-  if (!approvalCode) throw new Error('Gagal ambil approval code dari halaman authorize X');
+  if (!approvalCode) throw new Error(`Gagal ambil approval code dari halaman authorize X (status ${step2.status}, body: ${step2Text.slice(0, 300)})`);
 
   // Step 3: POST approve
   const step3 = await xRequest(
