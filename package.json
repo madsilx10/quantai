@@ -1,0 +1,14 @@
+{
+  "name": "tryquant-bot",
+  "version": "1.0.0",
+  "description": "TryQuant whitelist farming bot (X OAuth connect, daily claim, quantify, tasks, follow)",
+  "main": "tryquant.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node tryquant.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
