@@ -138,7 +138,7 @@ function parseScope(scopeArg, total) {
 // ================= HTTP HELPERS =================
 // Bearer token publik yang dipakai web X (dipakai banyak client, bukan token pribadi)
 const X_PUBLIC_BEARER =
-  'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
+  'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
 
 async function xRequest(method, url, { auth_token, ct0 }, opts = {}) {
   const headers = {
