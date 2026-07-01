@@ -60,7 +60,7 @@ const UA = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like G
 
 // ================= UTIL =================
 function log(msg) {
-  console.log(`[${new Date().toISOString()}] ${msg}`);
+  console.log(msg);
 }
 
 function sleep(ms) {
@@ -122,12 +122,21 @@ function parseScope(scopeArg, total) {
 }
 
 // ================= HTTP HELPERS =================
+// Bearer token publik yang dipakai web X (dipakai banyak client, bukan token pribadi)
+const X_PUBLIC_BEARER =
+  'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
+
 async function xRequest(method, url, { auth_token, ct0 }, opts = {}) {
   const headers = {
     'User-Agent': UA,
     'Cookie': `auth_token=${auth_token}; ct0=${ct0}`,
     'x-csrf-token': ct0,
+    'Authorization': `Bearer ${X_PUBLIC_BEARER}`,
+    'x-twitter-auth-type': 'OAuth2Session',
+    'x-twitter-active-user': 'yes',
+    'x-twitter-client-language': 'en',
     'Accept': '*/*',
+    'Accept-Language': 'en-US,en;q=0.9',
     ...opts.headers,
   };
   const res = await fetch(url, { method, headers, body: opts.body, redirect: 'manual' });
