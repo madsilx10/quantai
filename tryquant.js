@@ -173,18 +173,54 @@ async function connectX(account) {
   const { auth_token, ct0 } = account;
 
   // Step 1: minta authorize URL dari backend tryquant (pakai fetch manual biar dapet Set-Cookie)
+  // PENTING: redirect: 'manual' -- kalau step1 sebenernya 302 redirect, fetch default bakal
+  // ngikutin redirect itu dan Set-Cookie dari response PERTAMA jadi keburu ilang / gak kebaca.
   const step1Res = await fetch(
     `${BASE}/api/auth/x?redirectUri=${encodeURIComponent(X_REDIRECT_URI)}&startParam=ref-${START_LINK_REF}`,
     {
       headers: { 'User-Agent': UA, 'Accept': 'application/json, text/plain, */*' },
+      redirect: 'manual',
     }
   );
-  if (step1Res.status !== 200) throw new Error(`Step1 gagal: ${step1Res.status}`);
+  console.log('--- STEP1 STATUS ---', step1Res.status);
+  console.log('--- STEP1 LOCATION ---', step1Res.headers.get('location') || '(none)');
 
   // Ambil semua Set-Cookie dari response step 1 buat dipakai lagi di step 4
-  const setCookies = step1Res.headers.getSetCookie ? step1Res.headers.getSetCookie() : [];
-  const sessionCookie = setCookies.map((c) => c.split(';')[0]).join('; ');
+  let setCookies = step1Res.headers.getSetCookie ? step1Res.headers.getSetCookie() : [];
+  let sessionCookie = setCookies.map((c) => c.split(';')[0]).join('; ');
   console.log('--- STEP1 SET-COOKIE ---', sessionCookie || '(kosong)');
+
+  // Kalau ternyata redirect (3xx) dan belum dapet cookie, ikutin manual sambil nyimpen cookie di tiap hop
+  if (step1Res.status >= 300 && step1Res.status < 400) {
+    let nextUrl = step1Res.headers.get('location');
+    let hops = 0;
+    const collectedCookies = [...setCookies];
+    while (nextUrl && hops < 5) {
+      const resolved = new URL(nextUrl, BASE).toString();
+      const hopRes = await fetch(resolved, {
+        headers: {
+          'User-Agent': UA,
+          'Accept': 'application/json, text/plain, */*',
+          ...(collectedCookies.length ? { Cookie: collectedCookies.map((c) => c.split(';')[0]).join('; ') } : {}),
+        },
+        redirect: 'manual',
+      });
+      const hopCookies = hopRes.headers.getSetCookie ? hopRes.headers.getSetCookie() : [];
+      collectedCookies.push(...hopCookies);
+      console.log(`--- STEP1 HOP ${hops + 1} ---`, hopRes.status, resolved, 'SET-COOKIE:', hopCookies.join(' | ') || '(kosong)');
+      if (hopRes.status >= 300 && hopRes.status < 400) {
+        nextUrl = hopRes.headers.get('location');
+        hops++;
+      } else {
+        nextUrl = null;
+      }
+    }
+    setCookies = collectedCookies;
+    sessionCookie = setCookies.map((c) => c.split(';')[0]).join('; ');
+    console.log('--- STEP1 FINAL SESSION COOKIE (after redirects) ---', sessionCookie || '(masih kosong)');
+  } else if (step1Res.status !== 200) {
+    throw new Error(`Step1 gagal: ${step1Res.status}`);
+  }
 
   const { verifier, challenge } = genPkce();
   const state = genState();
