@@ -222,20 +222,32 @@ async function connectX(account) {
 
   // Step 4: hit callback tryquant buat exchange code -> access_token
   const cbUrl = new URL(finalRedirect);
-  const step4 = await tqRequest('GET', `${cbUrl.pathname}${cbUrl.search}`, {});
-  console.log('--- STEP4 STATUS ---', step4.status);
-  console.log('--- STEP4 BODY ---', JSON.stringify(step4.data).slice(0, 1000));
-  // NOTE: kalau tryquant nyimpen code_verifier di server-side session (bukan client),
-  // step4 ini mungkin butuh cookie session dari step1 juga. Kalau gagal, cek response step1
-  // untuk Set-Cookie dan re-attach di sini.
+  const step4Res = await fetch(`${BASE}${cbUrl.pathname}${cbUrl.search}`, {
+    headers: { 'User-Agent': UA, 'Accept': 'text/html,application/json' },
+    redirect: 'manual',
+  });
+  const step4Text = await step4Res.text();
+  console.log('--- STEP4 STATUS ---', step4Res.status);
+  console.log('--- STEP4 LOCATION HEADER ---', step4Res.headers.get('location'));
+  console.log('--- STEP4 BODY (awal) ---', step4Text.slice(0, 800));
 
-  if (!step4.data || !step4.data.access_token) {
-    throw new Error(`Callback gagal, response: ${JSON.stringify(step4.data)}`);
+  let step4Data = null;
+  try {
+    step4Data = JSON.parse(step4Text);
+  } catch {
+    // bukan JSON, coba cari access_token di HTML/script embed
+    const m = step4Text.match(/"access_token"\s*:\s*"([^"]+)"/);
+    const m2 = step4Text.match(/"refresh_token"\s*:\s*"([^"]+)"/);
+    if (m) step4Data = { access_token: m[1], refresh_token: m2 ? m2[1] : null };
+  }
+
+  if (!step4Data || !step4Data.access_token) {
+    throw new Error(`Callback gagal ambil access_token. status=${step4Res.status}`);
   }
 
   return {
-    access_token: step4.data.access_token,
-    refresh_token: step4.data.refresh_token,
+    access_token: step4Data.access_token,
+    refresh_token: step4Data.refresh_token,
   };
 }
 
