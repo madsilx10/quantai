@@ -143,6 +143,23 @@ async function xRequest(method, url, { auth_token, ct0 }, opts = {}) {
   return res;
 }
 
+// Khusus buat x.com/i/oauth2/authorize (halaman OAuth App consent) -- ini endpoint
+// browser-facing yang pakai session cookie biasa, BUKAN api.x.com yang butuh bearer
+// app-only + x-twitter-auth-type. Ngirim header itu ke sini kemungkinan besar
+// yang bikin 401, karena servernya expect user session murni lewat cookie.
+async function xAuthorizeRequest(method, url, { auth_token, ct0 }, opts = {}) {
+  const headers = {
+    'User-Agent': UA,
+    'Cookie': `auth_token=${auth_token}; ct0=${ct0}`,
+    'x-csrf-token': ct0,
+    'Accept': '*/*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    ...opts.headers,
+  };
+  const res = await fetch(url, { method, headers, body: opts.body, redirect: 'manual' });
+  return res;
+}
+
 async function tqRequest(method, path_, { token }, opts = {}) {
   const headers = {
     'User-Agent': UA,
@@ -245,7 +262,7 @@ async function connectX(account) {
   console.log('--- STATE (dari backend) ---', state);
 
   // Step 2: GET authorize page (buat approval token dari X)
-  const step2 = await xRequest('GET', authorizeUrl, { auth_token, ct0 });
+  const step2 = await xAuthorizeRequest('GET', authorizeUrl, { auth_token, ct0 });
   const step2Text = await step2.text();
   console.log('--- STEP2 STATUS ---', step2.status);
   console.log('--- STEP2 BODY (awal) ---', step2Text.slice(0, 1500));
@@ -260,7 +277,7 @@ async function connectX(account) {
   if (!approvalCode) throw new Error(`Gagal ambil approval code dari halaman authorize X (status ${step2.status}, body: ${step2Text.slice(0, 300)})`);
 
   // Step 3: POST approve
-  const step3 = await xRequest(
+  const step3 = await xAuthorizeRequest(
     'POST',
     'https://x.com/i/api/2/oauth2/authorize',
     { auth_token, ct0 },
