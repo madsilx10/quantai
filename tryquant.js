@@ -172,13 +172,19 @@ async function tqRequest(method, path_, { token }, opts = {}) {
 async function connectX(account) {
   const { auth_token, ct0 } = account;
 
-  // Step 1: minta authorize URL dari backend tryquant
-  const step1 = await tqRequest(
-    'GET',
-    `/api/auth/x?redirectUri=${encodeURIComponent(X_REDIRECT_URI)}&startParam=ref-${START_LINK_REF}`,
-    {}
+  // Step 1: minta authorize URL dari backend tryquant (pakai fetch manual biar dapet Set-Cookie)
+  const step1Res = await fetch(
+    `${BASE}/api/auth/x?redirectUri=${encodeURIComponent(X_REDIRECT_URI)}&startParam=ref-${START_LINK_REF}`,
+    {
+      headers: { 'User-Agent': UA, 'Accept': 'application/json, text/plain, */*' },
+    }
   );
-  if (step1.status !== 200) throw new Error(`Step1 gagal: ${step1.status}`);
+  if (step1Res.status !== 200) throw new Error(`Step1 gagal: ${step1Res.status}`);
+
+  // Ambil semua Set-Cookie dari response step 1 buat dipakai lagi di step 4
+  const setCookies = step1Res.headers.getSetCookie ? step1Res.headers.getSetCookie() : [];
+  const sessionCookie = setCookies.map((c) => c.split(';')[0]).join('; ');
+  console.log('--- STEP1 SET-COOKIE ---', sessionCookie || '(kosong)');
 
   const { verifier, challenge } = genPkce();
   const state = genState();
@@ -230,6 +236,7 @@ async function connectX(account) {
       'Content-Type': 'application/json',
       'Origin': BASE,
       'Referer': `${BASE}/auth/x/callback?state=${state}&code=${approvalCode}`,
+      ...(sessionCookie ? { Cookie: sessionCookie } : {}),
     },
     body: JSON.stringify({
       code: finalRedirect.match(/[?&]code=([^&]+)/)?.[1] || approvalCode,
