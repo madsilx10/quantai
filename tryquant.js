@@ -455,7 +455,11 @@ async function doFollowTargets(account, idx) {
       { auth_token, ct0 },
       { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
     );
+    const bodyText = await res.text().catch(() => '');
     logTask(idx, `follow @${username}`, res.status);
+    if (res.status !== 200) {
+      console.log(`  [debug] akun ${idx + 1} | follow @${username} | body: ${bodyText.slice(0, 500)}`);
+    }
     await sleep(5000);
   }
 }
